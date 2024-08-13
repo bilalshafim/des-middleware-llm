@@ -14,45 +14,48 @@ const (
 	authorizationToken = "sk-d471af019699429b825f5013333dc27e"
 )
 
-type RequestPayload struct {
-	Model    string    `json:"model"`
-	Messages []Message `json:"messages"`
-	Stream   bool      `json:"stream"`
-}
-
-type Message struct {
-	Role    string `json:"role"`
-	Content string `json:"content"`
-}
-
-type ResponsePayload struct {
-	Model              string `json:"model"`
-	CreatedAt          string `json:"created_at"`
-	Message            Message
-	DoneReason         string `json:"done_reason"`
-	Done               bool   `json:"done"`
-	TotalDuration      int64  `json:"total_duration"`
-	LoadDuration       int64  `json:"load_duration"`
-	PromptEvalDuration int64  `json:"prompt_eval_duration"`
-	EvalCount          int    `json:"eval_count"`
-	EvalDuration       int64  `json:"eval_duration"`
-}
-
-func SendAPIRequest(message *string) (*string, error) {
-	// Create request payload
-	messages := []Message{
-		{
-			Role:    "user",
-			Content: *message,
-		},
-		{
-			Role:    "user",
-			Content: "You are an advanced AI neural system for a NLU Chatbot. The NLU and you are different component of the same brain. Your job is to provide short answers for what the NLU is not capable of. Limit your response to one sentences. ",
-		},
+func CallLocalLLM(sessionID, message *string) *string {
+	// Implement your logic to interact with the local LLM
+	llmResponse, err := SendAPIRequest(sessionID, message)
+	// log.Println("Response_MemAddr: ", llmResponse)
+	if err != nil {
+		log.Println("Error: ", err)
+		if llmResponse != nil {
+			return llmResponse
+		}
+		return new(string)
 	}
+	return llmResponse
+}
+
+func SendAPIRequest(sessionID, message *string) (*string, error) {
+	// Create request payload
+	history := GetSessionHistory(*sessionID)
+	UpdateSessionHistory(*sessionID, "user", *message)
+
+	history = append(history, Message{
+		Role:    "user",
+		Content: *message,
+	})
+	history = append(history, Message{
+		Role:    "system",
+		Content: "You are an advanced AI neural system for a NLU Chatbot. The NLU and you are different component of the same brain. Your job is to provide short answers for what the NLU is not capable of. Limit your response to one sentences. ",
+	})
+
+	// messages := []Message{
+	// 	{
+	// 		Role:    "user",
+	// 		Content: *message,
+	// 	},
+	// 	{
+	// 		Role:    "user",
+	// 		Content: "You are an advanced AI neural system for a NLU Chatbot. The NLU and you are different component of the same brain. Your job is to provide short answers for what the NLU is not capable of. Limit your response to one sentences. ",
+	// 	},
+	// }
+	log.Print(history)
 	payload := RequestPayload{
 		Model:    "llama3:8b-instruct-q5_0",
-		Messages: messages,
+		Messages: history,
 		Stream:   false,
 	}
 
@@ -93,7 +96,11 @@ func SendAPIRequest(message *string) (*string, error) {
 	if err := json.Unmarshal(body, &response); err != nil {
 		return nil, fmt.Errorf("error unmarshalling response: %w", err)
 	}
+	if response.Message.Content != "" {
+		UpdateSessionHistory(*sessionID, "assistant", response.Message.Content)
+	}
 
+	log.Print(history)
 	// Print parsed response
 	log.Printf("Response: %+v", response.Message.Content)
 	return &response.Message.Content, nil

@@ -26,10 +26,11 @@ func webhookHandler(w http.ResponseWriter, r *http.Request) {
 	handler.HandleIntent(&req.QueryResult.Intent.DisplayName)
 
 	log.Printf("QueryText: %s", req.QueryResult.QueryText)
-	log.Print("QueryText_MemAddr: ", &req.QueryResult.QueryText)
+	// log.Print("QueryText_MemAddr: ", &req.QueryResult.QueryText)
+	log.Printf("SessionID: %s", req.Session)
 
 	start := time.Now()
-	responseText := callLocalLLM(&req.QueryResult.QueryText)
+	responseText := llm.CallLocalLLM(&req.Session, &req.QueryResult.QueryText)
 	duration := time.Since(start)
 	log.Printf("llm_proc_time: %v\n", duration)
 
@@ -58,21 +59,9 @@ func webhookHandler(w http.ResponseWriter, r *http.Request) {
 	// json.NewEncoder(w).Encode(response)
 }
 
-func callLocalLLM(message *string) *string {
-	// Implement your logic to interact with the local LLM
-	llmResponse, err := llm.SendAPIRequest(message)
-	log.Println("Response_MemAddr: ", llmResponse)
-	if err != nil {
-		log.Println("Error: ", err)
-		if llmResponse != nil {
-			return llmResponse
-		}
-		return new(string)
-	}
-	return llmResponse
-}
-
 func main() {
+	go llm.CleanupExpiredSessions()
+
 	http.HandleFunc("/inference", webhookHandler)
 	log.Println("Starting server on port 8080")
 	log.Fatal(http.ListenAndServe(":8080", nil))
